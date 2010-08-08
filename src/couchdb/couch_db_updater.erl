@@ -30,16 +30,13 @@ init({MainPid, DbName, Filepath, Fd, Options}) ->
         RootDir = couch_config:get("couchdb", "database_dir", "."),
         couch_file:delete(RootDir, Filepath ++ ".compact");
     false ->
-        ok = couch_file:upgrade_old_header(Fd, <<$g, $m, $k, 0>>), % 09 UPGRADE CODE
         case couch_file:read_header(Fd) of
         {ok, Header} ->
             ok;
         no_valid_header ->
             % create a new header and writes it to the file
             Header =  #db_header{},
-            ok = couch_file:write_header(Fd, Header),
-            % delete any old compaction files that might be hanging around
-            file:delete(Filepath ++ ".compact")
+            ok = couch_file:write_header(Fd, Header)
         end
     end,
 
@@ -184,7 +181,6 @@ handle_cast({compact_done, CompactFilepath}, #db{filepath=Filepath}=Db) ->
                 [Filepath, CompactFilepath]),
         RootDir = couch_config:get("couchdb", "database_dir", "."),
         couch_file:delete(RootDir, Filepath),
-        ok = file:rename(CompactFilepath, Filepath),
         close_db(Db),
         ok = gen_server:call(Db#db.main_pid, {db_updated, NewDb2}),
         ?LOG_INFO("Compaction for db \"~s\" completed.", [Db#db.name]),
@@ -377,7 +373,7 @@ init_db(DbName, Filepath, Fd, Header0) ->
                     "[before_header, after_header, on_file_open]")),
 
     case lists:member(on_file_open, FsyncOptions) of
-    true -> ok = couch_file:sync(Fd);
+    true -> ok;
     _ -> ok
     end,
 
@@ -693,7 +689,7 @@ commit_data(Db, true) ->
 commit_data(Db, _) ->
     #db{
         fd = Fd,
-        filepath = Filepath,
+        filepath = _Filepath,
         header = OldHeader,
         fsync_options = FsyncOptions,
         waiting_delayed_commit = Timer
@@ -704,14 +700,14 @@ commit_data(Db, _) ->
         Db#db{waiting_delayed_commit=nil};
     Header ->
         case lists:member(before_header, FsyncOptions) of
-        true -> ok = couch_file:sync(Filepath);
+        true -> ok;
         _    -> ok
         end,
 
         ok = couch_file:write_header(Fd, Header),
 
         case lists:member(after_header, FsyncOptions) of
-        true -> ok = couch_file:sync(Filepath);
+        true -> ok;
         _    -> ok
         end,
 
@@ -864,12 +860,11 @@ start_copy_compact(#db{name=Name,filepath=Filepath}=Db) ->
     {ok, Fd} ->
         couch_task_status:add_task(<<"Database Compaction">>, <<Name/binary, " retry">>, <<"Starting">>),
         Retry = true,
-        {ok, Header} = couch_file:read_header(Fd);
-    {error, enoent} ->
-        couch_task_status:add_task(<<"Database Compaction">>, Name, <<"Starting">>),
-        {ok, Fd} = couch_file:open(CompactFile, [create]),
-        Retry = false,
-        ok = couch_file:write_header(Fd, Header=#db_header{})
+        case couch_file:read_header(Fd) of
+          {ok, Header} -> ok;
+          no_valid_header -> Header = #db_header{},
+                             couch_file:write_header(Fd, Header)
+        end
     end,
     NewDb = init_db(Name, CompactFile, Fd, Header),
     unlink(Fd),

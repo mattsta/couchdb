@@ -51,8 +51,6 @@ open_db_file(Filepath, Options) ->
         case couch_file:open(Filepath ++ ".compact") of
         {ok, Fd} ->
             ?LOG_INFO("Found ~s~s compaction file, using as primary storage.", [Filepath, ".compact"]),
-            ok = file:rename(Filepath ++ ".compact", Filepath),
-            ok = couch_file:sync(Fd),
             {ok, Fd};
         {error, enoent} ->
             {not_found, no_db_file}
@@ -240,7 +238,6 @@ get_db_info(Db) ->
         name=Name,
         fulldocinfo_by_id_btree=FullDocBtree,
         instance_start_time=StartTime} = Db,
-    {ok, Size} = couch_file:bytes(Fd),
     {ok, {Count, DelCount}} = couch_btree:full_reduce(FullDocBtree),
     InfoList = [
         {db_name, Name},
@@ -249,7 +246,7 @@ get_db_info(Db) ->
         {update_seq, SeqNum},
         {purge_seq, couch_db:get_purge_seq(Db)},
         {compact_running, Compactor/=nil},
-        {disk_size, Size},
+        {disk_size, "riak"},
         {instance_start_time, StartTime},
         {disk_format_version, DiskVersion}
         ],

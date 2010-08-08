@@ -18,6 +18,8 @@
 -export([handle_cast/2,code_change/3,handle_info/2,terminate/2]).
 -export([dev_start/0,is_admin/2,has_admins/0,get_stats/0]).
 
+-export([hash_admin_passwords/0]).  % silence a warning
+
 -include("couch_db.hrl").
 
 -record(server,{
@@ -132,8 +134,6 @@ init([]) ->
             gen_server:call(couch_server,
                     {set_max_dbs_open, list_to_integer(Max)})
         end),
-    ok = couch_file:init_delete_dir(RootDir),
-    hash_admin_passwords(),
     ok = couch_config:register(
         fun("admins", _Key, _Value, Persist) ->
             % spawn here so couch_config doesn't try to call itself
@@ -324,7 +324,6 @@ handle_call({delete, DbName, _Options}, _From, Server) ->
     DbNameList = binary_to_list(DbName),
     case check_dbname(Server, DbNameList) of
     ok ->
-        FullFilepath = get_full_filename(Server, DbNameList),
         UpdateState =
         case ets:lookup(couch_dbs_by_name, DbName) of
         [] -> false;
@@ -341,7 +340,7 @@ handle_call({delete, DbName, _Options}, _From, Server) ->
             true = ets:delete(couch_dbs_by_lru, LruTime),
             true
         end,
-        Server2 = case UpdateState of
+        case UpdateState of
         true ->
             DbsOpen = case ets:member(couch_sys_dbs, DbName) of
             true ->
@@ -353,20 +352,6 @@ handle_call({delete, DbName, _Options}, _From, Server) ->
             Server#server{dbs_open = DbsOpen};
         false ->
             Server
-        end,
-
-        %% Delete any leftover .compact files.  If we don't do this a subsequent
-        %% request for this DB will try to open the .compact file and use it.
-        couch_file:delete(Server#server.root_dir, FullFilepath ++ ".compact"),
-
-        case couch_file:delete(Server#server.root_dir, FullFilepath) of
-        ok ->
-            couch_db_update_notifier:notify({deleted, DbName}),
-            {reply, ok, Server2};
-        {error, enoent} ->
-            {reply, not_found, Server2};
-        Else ->
-            {reply, Else, Server2}
         end;
     Error ->
         {reply, Error, Server}

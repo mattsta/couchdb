@@ -447,22 +447,25 @@ host_for_request(#httpd{mochi_req=MochiReq}) ->
     end.
 
 absolute_uri(#httpd{mochi_req=MochiReq}=Req, Path) ->
-    Host = host_for_request(Req),
-    XSsl = couch_config:get("httpd", "x_forwarded_ssl", "X-Forwarded-Ssl"),
-    Scheme = case MochiReq:get_header_value(XSsl) of
-                 "on" -> "https";
-                 _ ->
-                     XProto = couch_config:get("httpd", "x_forwarded_proto", "X-Forwarded-Proto"),
-                     case MochiReq:get_header_value(XProto) of
-                         %% Restrict to "https" and "http" schemes only
-                         "https" -> "https";
-                         _ -> case MochiReq:get(scheme) of
-                                  https -> "https";
-                                  http -> "http"
-                              end
-                     end
-             end,
-    Scheme ++ "://" ++ Host ++ Path.
+    % Figure out why this crashes when the original is uncommented:
+    % io:format("Asking for URI to path: ~p~n", [Path]),
+    "http://127.0.0.1:5984" ++ Path.
+%    Host = host_for_request(Req),
+%    XSsl = couch_config:get("httpd", "x_forwarded_ssl", "X-Forwarded-Ssl"),
+%    Scheme = case MochiReq:get_header_value(XSsl) of
+%                 "on" -> "https";
+%                 _ ->
+%                     XProto = couch_config:get("httpd", "x_forwarded_proto", "X-Forwarded-Proto"),
+%                     case MochiReq:get_header_value(XProto) of
+%                         %% Restrict to "https" and "http" schemes only
+%                         "https" -> "https";
+%                         _ -> case MochiReq:get(scheme) of
+%                                  https -> "https";
+%                                  http -> "http"
+%                              end
+%                     end
+%             end,
+%    Scheme ++ "://" ++ Host ++ Path.
 
 unquote(UrlEncodedString) ->
     mochiweb_util:unquote(UrlEncodedString).

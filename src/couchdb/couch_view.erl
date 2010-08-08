@@ -279,7 +279,6 @@ init([]) ->
     ets:new(group_servers_by_sig, [set, protected, named_table]),
     ets:new(couch_groups_by_updater, [set, private, named_table]),
     process_flag(trap_exit, true),
-    ok = couch_file:init_delete_dir(RootDir),
     {ok, #server{root_dir=RootDir}}.
 
 

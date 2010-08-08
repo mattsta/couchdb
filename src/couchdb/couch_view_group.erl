@@ -187,7 +187,9 @@ handle_cast({compact_done, #group{current_seq=NewSeq} = NewGroup},
     FileName = index_file_name(RootDir, DbName, GroupSig),
     CompactName = index_file_name(compact, RootDir, DbName, GroupSig),
     ok = couch_file:delete(RootDir, FileName),
-    ok = file:rename(CompactName, FileName),
+    ?LOG_INFO("Replacing Actual Header with Compacted Header (~p => ~p)", [CompactName, FileName]),
+    {ok, CHeader} = couch_file:read_header(CompactName),
+    couch_file:write_header(FileName, CHeader),
 
     %% if an updater is running, kill it and start a new one
     NewUpdaterPid =
@@ -487,11 +489,10 @@ get_group_info(State) ->
         current_seq=CurrentSeq,
         purge_seq=PurgeSeq
     } = Group,
-    {ok, Size} = couch_file:bytes(Fd),
     [
         {signature, ?l2b(hex_sig(GroupSig))},
         {language, Lang},
-        {disk_size, Size},
+        {disk_size, "riak"},
         {updater_running, UpdaterPid /= nil},
         {compact_running, CompactorPid /= nil},
         {waiting_commit, WaitingCommit},
